@@ -16,16 +16,21 @@ verbose  = 0
 patience = 1000
 units    = 128
 dropout  = 0.5
-learning_rate = 1e-3
-
+max_obs  = 200
+repeat   = 2
+l_rate   = 1e-3
 
 # Read Data
 num_classes = tf.reduce_sum([1 for _ in os.listdir(
                              os.path.join(datadir, 'train'))])
 train_batches = load_records(os.path.join(datadir, 'train'),
-                             batch_size=16)
+                             batch_size=16,
+                             max_obs=max_obs,
+                             repeat=repeat)
 valid_batches = load_records(os.path.join(datadir, 'val'),
-                             batch_size=16)
+                             batch_size=16,
+                             max_obs=max_obs,
+                             repeat=repeat)
 
 # Instance the model
 model = get_lstm(units=units, num_classes=num_classes, dropout=dropout)
@@ -51,7 +56,7 @@ def valid_step(model, batch, return_pred=False):
         return acc, ce, y_pred, batch['label']
     return acc, ce
 
-optimizer = tf.optimizers.Adam()
+
 # Tensorboard
 train_writter = tf.summary.create_file_writer(
                                 os.path.join(exp_path, 'logs', 'train'))
@@ -59,10 +64,7 @@ valid_writter = tf.summary.create_file_writer(
                                 os.path.join(exp_path, 'logs', 'valid'))
 
 # Optimizer
-optimizer = tf.keras.optimizers.Adam(learning_rate,
-                                     beta_1=0.9,
-                                     beta_2=0.98,
-                                     epsilon=1e-9)
+optimizer = tf.keras.optimizers.Adam(l_rate)
 # To save metrics
 train_bce  = tf.keras.metrics.Mean(name='train_bce')
 valid_bce  = tf.keras.metrics.Mean(name='valid_bce')
