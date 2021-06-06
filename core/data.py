@@ -27,7 +27,7 @@ def create_mask(tensor, lengths):
     return tf.transpose(mask)
 
 
-def _parse(sample):
+def _parse(sample, max_obs=200):
     context_features = {'label': tf.io.FixedLenFeature([],dtype=tf.int64),
                         'length': tf.io.FixedLenFeature([],dtype=tf.int64),
                         'id': tf.io.FixedLenFeature([], dtype=tf.string)}
@@ -54,7 +54,6 @@ def _parse(sample):
 
     input_serie = tf.stack(casted_inp_parameters, axis=2)[0]
 
-    max_obs = 200
     serie_len = tf.shape(input_serie)[0]
     curr_max_obs = tf.minimum(max_obs, serie_len)
 
@@ -79,11 +78,11 @@ def _parse(sample):
     input_dict['mask'] = mask
     return input_dict
 
-def load_records(source, batch_size, max_obs=100, repeat=1):
+def load_records(source, batch_size, max_obs=200, repeat=1):
     datasets = [tf.data.TFRecordDataset(os.path.join(source, folder, x)) \
                         for folder in os.listdir(source) if not folder.endswith('.csv')\
                         for x in os.listdir(os.path.join(source, folder))]
-    datasets = [dataset.map(_parse) for dataset in datasets]
+    datasets = [dataset.map(lambda x: _parse(x, max_obs)) for dataset in datasets]
     datasets = [dataset.repeat(repeat) for dataset in datasets]
     datasets = [dataset.cache() for dataset in datasets]
     datasets = [dataset.shuffle(1000, reshuffle_each_iteration=True) for dataset in datasets]

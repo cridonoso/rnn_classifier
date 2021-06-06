@@ -5,7 +5,7 @@ sys.path.append(os.environ['ROOTDIR'])
 from core.tboard  import save_scalar, draw_graph
 from core.custom_metrics import custom_acc
 from core.custom_losses import custom_bce
-from data.record_utils import load_records
+from core.data import load_records
 from core.models import get_lstm
 from tqdm import tqdm
 
@@ -73,8 +73,7 @@ valid_acc  = tf.keras.metrics.Mean(name='valid_acc')
 best_loss = 999999.
 es_count = 0
 for epoch in range(epochs):
-    for step, train_batch in tqdm(enumerate(train_batches), desc='train'):
-        print(train_batch['values'].shape)
+    for train_batch in tqdm(train_batches, desc='train'):
         acc, bce = train_step(model, train_batch, optimizer)
         train_acc.update_state(acc)
         train_bce.update_state(bce)
