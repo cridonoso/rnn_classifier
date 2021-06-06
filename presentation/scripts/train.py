@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 exp_path = './runs/model_1'
 datadir  = './astromer/data/records/macho'
+b_size   = 128
 epochs   = 3000
 verbose  = 0
 patience = 1000
@@ -24,11 +25,11 @@ l_rate   = 1e-3
 num_classes = tf.reduce_sum([1 for _ in os.listdir(
                              os.path.join(datadir, 'train'))])
 train_batches = load_records(os.path.join(datadir, 'train'),
-                             batch_size=16,
+                             batch_size=b_size,
                              max_obs=max_obs,
                              repeat=repeat)
 valid_batches = load_records(os.path.join(datadir, 'val'),
-                             batch_size=16,
+                             batch_size=b_size,
                              max_obs=max_obs,
                              repeat=repeat)
 
