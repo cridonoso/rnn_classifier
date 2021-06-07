@@ -6,11 +6,12 @@ from core.tboard  import save_scalar, draw_graph
 from core.custom_metrics import custom_acc
 from core.custom_losses import custom_bce
 from core.data import load_records
-from core.models import get_lstm
+from core.models import get_lstm_attention, get_lstm_no_attention
 from tqdm import tqdm
 
 exp_path = './runs/model_1'
 datadir  = './astromer/data/records/macho'
+mode     = 0
 b_size   = 128
 epochs   = 3000
 verbose  = 0
@@ -27,14 +28,23 @@ num_classes = tf.reduce_sum([1 for _ in os.listdir(
 train_batches = load_records(os.path.join(datadir, 'train'),
                              batch_size=b_size,
                              max_obs=max_obs,
-                             repeat=repeat)
+                             repeat=repeat,
+                             mode=mode)
 valid_batches = load_records(os.path.join(datadir, 'val'),
                              batch_size=b_size,
                              max_obs=max_obs,
-                             repeat=repeat)
+                             repeat=repeat,
+                             mode=mode)
 
 # Instance the model
-model = get_lstm(units=units, num_classes=num_classes, dropout=dropout)
+if mode == 0:
+    model = get_lstm_attention(units=units,
+                               num_classes=num_classes,
+                               dropout=dropout)
+if mode == 1:
+    model = get_lstm_no_attention(units=units,
+                                  num_classes=num_classes,
+                                  dropout=dropout)
 
 @tf.function
 def train_step(model, batch, opt):
