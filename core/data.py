@@ -81,9 +81,10 @@ def _parse(input_dict):
     times = tf.slice(input_dict['values'], [0,0],[-1, 1])
     dtimes = get_delta(times)
     values = tf.slice(input_dict['values'], [0,1],[-1, 1])
+    values = standardize(values)
     out = astromer_emb(times, values)
     out = standardize(out, axis=1)
-    inputs = tf.concat([dtimes, out], 1)
+    inputs = tf.concat([dtimes, values, out], 1)
     input_dict['values'] = inputs
     input_dict['times'] = times
     return input_dict

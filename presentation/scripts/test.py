@@ -11,7 +11,7 @@ from core.custom_metrics import custom_acc
 from core.custom_losses import custom_bce
 from core.tboard  import save_scalar, draw_graph
 from core.models import get_lstm_attention, get_lstm_no_attention
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 from core.data import load_records
 from time import gmtime, strftime
 from tqdm import tqdm
@@ -60,29 +60,31 @@ def run(opt):
 
 
     weights_path = '{}/weights'.format(opt.p)
-    model.load_weights(weights_path)#.expect_partial()
+    model.load_weights(weights_path).expect_partial()
 
 
-    rec_list, prec_list, f1_list = [],[],[]
+
     predictions = []
     true_labels = []
     for batch in tqdm(test_batches, desc='test'):
         acc, ce, y_pred, y_true = valid_step(model, batch, return_pred=True)
         predictions.append(y_pred)
         true_labels.append(y_true)
-        y_pred = tf.argmax(y_pred[:, -1, :], 1)
-        precision, recall, f1, _ = precision_recall_fscore_support(y_true,
-                                                                   y_pred,
-                                                                   average='macro')
-        rec_list.append(recall)
-        prec_list.append(precision)
-        f1_list.append(f1)
 
     y_pred = tf.concat(predictions, 0)
     y_true = tf.concat(true_labels, 0)
-    results = {'f1': tf.reduce_mean(f1_list).numpy(),
-               'recall': tf.reduce_mean(rec_list).numpy(),
-               'precision': tf.reduce_mean(prec_list).numpy()}
+    pred_labels = tf.argmax(y_pred[:, -1, :], 1)
+
+    precision, \
+    recall, \
+    f1, _ = precision_recall_fscore_support(y_true,
+                                            pred_labels,
+                                            average='macro')
+    acc = accuracy_score(y_true, pred_labels)
+    results = {'f1': f1,
+               'recall': recall,
+               'precision': precision,
+               'accuracy':acc}
 
     os.makedirs(os.path.join(opt.p, 'test'), exist_ok=True)
     results_file = os.path.join(opt.p, 'test', 'test_results.json')
