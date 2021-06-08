@@ -1,9 +1,9 @@
 import tensorflow as tf
 import os
 
-from astromer.core.embedding import BASE_ASTROMER
+from astropackage import embedding
+astromer_emb = embedding.BASE_ASTROMER()
 
-astromer_emb = BASE_ASTROMER()
 
 def _bytes_feature(value):
     """Returns a bytes_list from a string / byte."""
