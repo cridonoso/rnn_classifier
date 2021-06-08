@@ -28,15 +28,6 @@ def standardize(tensor, axis=0):
                  (tensor - mean_value)/std_value)
     return normed
 
-def create_mask(tensor, lengths):
-    ''' Create mask given a tensor and true length '''
-    lengths_transposed = lengths
-    rangex = tf.range(0, tf.shape(tensor)[0], 1)
-    range_row = tf.expand_dims(rangex, 0)
-    # Use the logical operations to create a mask
-    mask = tf.less(range_row, lengths_transposed)
-    return tf.transpose(mask)
-
 def get_delta(tensor):
     tensor = tensor[1:] - tensor[:-1]
     tensor = tf.concat([tf.expand_dims([0.], 1), tensor], 0)
@@ -81,9 +72,8 @@ def _decode(sample, max_obs=200):
 
     input_serie = tf.slice(input_serie, [pivot,0], [curr_max_obs, -1])
 
+    input_dict['length'] = curr_max_obs
     input_dict['values'] = input_serie
-    mask = create_mask(input_serie, max_obs)
-    input_dict['mask'] = mask
 
     return input_dict
 
@@ -111,20 +101,32 @@ def _parse_2(input_dict):
     return input_dict
 
 def load_records(source, batch_size, max_obs=200, repeat=1, mode=0):
-    datasets = [tf.data.TFRecordDataset(os.path.join(source, folder, x)) \
-                        for folder in os.listdir(source) if not folder.endswith('.csv')\
-                        for x in os.listdir(os.path.join(source, folder))]
-    datasets = [dataset.map(lambda x: _decode(x, max_obs)) for dataset in datasets]
 
-    if mode == 0:
-        datasets = [dataset.map(_parse) for dataset in datasets]
-    if mode == 1:
-        datasets = [dataset.map(_parse_2) for dataset in datasets]
+    if repeat != -1:
+        datasets = [tf.data.TFRecordDataset(os.path.join(source, folder, x)) \
+                    for folder in os.listdir(source) if not folder.endswith('.csv')\
+                    for x in os.listdir(os.path.join(source, folder))]
+        datasets = [dataset.map(lambda x: _decode(x, max_obs)) for dataset in datasets]
+        if mode == 0:
+            datasets = [dataset.map(_parse) for dataset in datasets]
+        if mode == 1:
+            datasets = [dataset.map(_parse_2) for dataset in datasets]
+        datasets = [dataset.repeat(repeat) for dataset in datasets]
+        datasets = [dataset.cache() for dataset in datasets]
+        datasets = [dataset.shuffle(1000, reshuffle_each_iteration=True) for dataset in datasets]
+        dataset = tf.data.experimental.sample_from_datasets(datasets)
 
-    datasets = [dataset.repeat(repeat) for dataset in datasets]
-    datasets = [dataset.cache() for dataset in datasets]
-    datasets = [dataset.shuffle(1000, reshuffle_each_iteration=True) for dataset in datasets]
-    dataset = tf.data.experimental.sample_from_datasets(datasets)
+    else: # TESTING LOADER
+        datasets = [os.path.join(source, folder, x) \
+                    for folder in os.listdir(source) if not folder.endswith('.csv')\
+                    for x in os.listdir(os.path.join(source, folder))]
+        dataset = tf.data.TFRecordDataset(datasets)
+        dataset = dataset.map(lambda x: _decode(x, max_obs))
+        if mode == 0:
+            dataset = dataset.map(_parse)
+        if mode == 1:
+            dataset = dataset.map(_parse_2)
+
     dataset = dataset.padded_batch(batch_size)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
     return dataset
