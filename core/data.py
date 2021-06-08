@@ -62,17 +62,18 @@ def _decode(sample, max_obs=200):
 
     # Sampling "max_obs" observations
     serie_len = tf.shape(input_serie)[0]
-    curr_max_obs = tf.minimum(max_obs, serie_len)
-    pivot = 0
-    if tf.greater(serie_len, max_obs):
-        pivot = tf.random.uniform([],
-                                  minval=0,
-                                  maxval=serie_len-curr_max_obs,
-                                  dtype=tf.int32)
+    input_dict['length'] = serie_len
+    if max_obs !=  -1:
+        curr_max_obs = tf.minimum(max_obs, serie_len)
+        pivot = 0
+        if tf.greater(serie_len, max_obs):
+            pivot = tf.random.uniform([],
+                                      minval=0,
+                                      maxval=serie_len-curr_max_obs,
+                                      dtype=tf.int32)
 
-    input_serie = tf.slice(input_serie, [pivot,0], [curr_max_obs, -1])
-
-    input_dict['length'] = curr_max_obs
+        input_serie = tf.slice(input_serie, [pivot,0], [curr_max_obs, -1])
+        input_dict['length'] = curr_max_obs
     input_dict['values'] = input_serie
 
     return input_dict
@@ -85,6 +86,8 @@ def _parse(input_dict):
     out = astromer_emb(times, values)
     out = standardize(out, axis=1)
     out = tf.reshape(out, [tf.shape(values)[0], tf.shape(out)[-1]])
+
+    # out = tf.concat([dtimes, out], 1)
 
     input_dict['values'] = out
     input_dict['times'] = times
@@ -123,7 +126,7 @@ def load_records(source, batch_size, max_obs=200, repeat=1, mode=0):
                     for folder in os.listdir(source) if not folder.endswith('.csv')\
                     for x in os.listdir(os.path.join(source, folder))]
         dataset = tf.data.TFRecordDataset(datasets)
-        dataset = dataset.map(lambda x: _decode(x, max_obs))
+        dataset = dataset.map(lambda x: _decode(x, -1))
         if mode == 0:
             dataset = dataset.map(_parse)
         if mode == 1:

@@ -16,7 +16,7 @@ def get_lstm_attention(units, num_classes, max_obs=200, inp_dim=108, dropout=0.5
     x = Dense(num_classes, name='FCN')(x)
     return Model(inputs=inputs, outputs=x, name="RNNCLF")
 
-def get_lstm_no_attention(units, num_classes, dropout=0.5, max_obs=200):
+def get_lstm_no_attention(units, num_classes, max_obs=200, inp_dim=108, dropout=0.5):
     values = Input(shape=(max_obs, 3), name='input')
     lengths   = Input(shape=(), dtype=tf.int32, name='mask')
     inputs = {'values': values, 'length': lengths}

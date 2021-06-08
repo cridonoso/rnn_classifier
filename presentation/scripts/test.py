@@ -37,26 +37,28 @@ def run(opt):
 
     # Read Data
     num_classes = tf.reduce_sum([1 for _ in os.listdir(
-                                 os.path.join(opt.data, 'train'))])
-    test_batches = load_records(os.path.join(opt.data, 'train'),
+                                 os.path.join(opt.data, 'test'))])
+    test_batches = load_records(os.path.join(opt.data, 'test'),
                                 batch_size=opt.batch_size,
                                 max_obs=200,
                                 repeat=-1,# for testing
                                 mode=conf['mode'])
 
     max_obs = [t['values'].shape[1] for t in test_batches][0]
-
+    inp_dim = [t['values'].shape[-1] for t in test_batches][0]
     # Instance the model
     if conf['mode'] == 0:
         model = get_lstm_attention(units=conf['units'],
                                    num_classes=conf['num_classes'],
                                    dropout=conf['dropout'],
-                                   max_obs=max_obs)
+                                   max_obs=None,
+                                   inp_dim=inp_dim)
     if conf['mode'] == 1:
         model = get_lstm_no_attention(units=conf['units'],
                                       num_classes=conf['num_classes'],
                                       dropout=conf['dropout'],
-                                      max_obs=max_obs)
+                                      max_obs=None,
+                                      inp_dim=inp_dim)
 
 
     weights_path = '{}/weights'.format(opt.p)
@@ -68,12 +70,12 @@ def run(opt):
     true_labels = []
     for batch in tqdm(test_batches, desc='test'):
         acc, ce, y_pred, y_true = valid_step(model, batch, return_pred=True)
-        predictions.append(y_pred)
+        predictions.append(y_pred[:, -1, :])
         true_labels.append(y_true)
 
     y_pred = tf.concat(predictions, 0)
     y_true = tf.concat(true_labels, 0)
-    pred_labels = tf.argmax(y_pred[:, -1, :], 1)
+    pred_labels = tf.argmax(y_pred, 1)
 
     precision, \
     recall, \
