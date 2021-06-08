@@ -5,7 +5,6 @@ import warnings
 import os, sys
 import h5py
 import json
-sys.path.append(os.environ['ROOTDIR'])
 
 from core.custom_metrics import custom_acc
 from core.custom_losses import custom_bce

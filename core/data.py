@@ -83,7 +83,9 @@ def _parse(input_dict):
     dtimes = get_delta(times)
     values = tf.slice(input_dict['values'], [0,1],[-1, 1])
     values = standardize(values)
-    out = astromer_emb(times, values)
+
+    out = astromer_emb(values, times)
+
     out = standardize(out, axis=1)
     out = tf.reshape(out, [tf.shape(values)[0], tf.shape(out)[-1]])
 
