@@ -49,14 +49,19 @@ def run(opt):
                                  repeat=opt.repeat,
                                  mode=opt.mode)
 
+    inp_dim = [t['values'].shape[-1] for t in train_batches][0]
     # Instance the model
     if opt.mode == 0:
         model = get_lstm_attention(units=opt.units,
                                    num_classes=num_classes,
+                                   max_obs=opt.max_obs,
+                                   inp_dim=inp_dim,
                                    dropout=opt.dropout)
     if opt.mode == 1:
         model = get_lstm_no_attention(units=opt.units,
                                       num_classes=num_classes,
+                                      max_obs=opt.max_obs,
+                                      inp_dim=inp_dim,
                                       dropout=opt.dropout)
 
     # Tensorboard
