@@ -9,7 +9,7 @@ import json
 from core.custom_metrics import custom_acc
 from core.custom_losses import custom_bce
 from core.tboard  import save_scalar, draw_graph
-from core.models import get_lstm_attention, get_lstm_no_attention
+from core.models import get_lstm_attention, get_lstm_no_attention, get_fc_attention
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 from core.data import load_records
 from time import gmtime, strftime
@@ -39,9 +39,8 @@ def run(opt):
                                  os.path.join(opt.data, 'test'))])
     test_batches = load_records(os.path.join(opt.data, 'test'),
                                 batch_size=opt.batch_size,
-                                max_obs=100,
-                                repeat=-1,# for testing
-                                mode=conf['mode'])
+                                max_obs=conf['max_obs'],
+                                repeat=1)
 
     max_obs = [t['values'].shape[1] for t in test_batches][0]
     inp_dim = [t['values'].shape[-1] for t in test_batches][0]
@@ -50,15 +49,20 @@ def run(opt):
         model = get_lstm_attention(units=conf['units'],
                                    num_classes=conf['num_classes'],
                                    dropout=conf['dropout'],
-                                   max_obs=None,
+                                   max_obs=conf['max_obs'],
                                    inp_dim=inp_dim)
     if conf['mode'] == 1:
         model = get_lstm_no_attention(units=conf['units'],
                                       num_classes=conf['num_classes'],
-                                      dropout=conf['dropout'],
-                                      max_obs=None,
-                                      inp_dim=inp_dim)
+                                      max_obs=conf['max_obs'],
+                                      inp_dim=inp_dim,
+                                      dropout=conf['dropout'])
 
+    if conf['mode'] == 2:
+        model = get_fc_attention(num_classes=num_classes,
+                                   max_obs=conf['max_obs'],
+                                   inp_dim=inp_dim,
+                                   dropout=conf['dropout'])
 
     weights_path = '{}/weights'.format(opt.p)
     model.load_weights(weights_path).expect_partial()
