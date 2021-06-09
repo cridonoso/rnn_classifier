@@ -7,6 +7,19 @@ from core.mask import create_mask
 
 from astropackage.embeddings import ASTROMER_EMBEDDING
 
+def get_fc_attention(num_classes, max_obs=200, inp_dim=108, dropout=0.5):
+    values = Input(shape=(max_obs, inp_dim), name='input')
+    lengths   = Input(shape=(), dtype=tf.int32, name='mask')
+    inputs = {'values': values, 'length': lengths}
+    mask = create_mask(inputs['values'], inputs['length'])
+
+    times = tf.slice(values, [0,0,0],[-1,-1,1])
+    magns = tf.slice(values, [0,0,1],[-1,-1,1])
+    x_cls, _ = ASTROMER_EMBEDDING()(magns, times, inputs['length'])
+
+    x = Dense(num_classes, name='FCN')(x_cls)
+    return Model(inputs=inputs, outputs=x, name="RNNCLF")
+
 def get_lstm_attention(units, num_classes, max_obs=200, inp_dim=108, dropout=0.5):
     values = Input(shape=(max_obs, inp_dim), name='input')
     lengths   = Input(shape=(), dtype=tf.int32, name='mask')

@@ -7,7 +7,7 @@ import json
 from core.custom_metrics import custom_acc
 from core.custom_losses import custom_bce
 from core.tboard  import save_scalar, draw_graph
-from core.models import get_lstm_attention, get_lstm_no_attention
+from core.models import get_lstm_attention, get_lstm_no_attention, get_fc_attention
 from core.data import load_records
 from time import gmtime, strftime
 from tqdm import tqdm
@@ -60,6 +60,12 @@ def run(opt):
                                       max_obs=opt.max_obs,
                                       inp_dim=inp_dim,
                                       dropout=opt.dropout)
+
+    if opt.mode == 2:
+        model = get_fc_attention(num_classes=num_classes,
+                                   max_obs=opt.max_obs,
+                                   inp_dim=inp_dim,
+                                   dropout=opt.dropout)
 
     # Tensorboard
     train_writter = tf.summary.create_file_writer(
