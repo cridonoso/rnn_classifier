@@ -17,7 +17,8 @@ def get_fc_attention(num_classes, max_obs=200, inp_dim=108, dropout=0.5):
     magns = tf.slice(values, [0,0,1],[-1,-1,1])
     x_cls, _ = ASTROMER_EMBEDDING()(magns, times, inputs['length'])
     x = tf.reshape(x_cls, [tf.shape(times)[0], 106])
-    x = Dense(num_classes, name='FCN')(x)
+    x = Dense(64, name='FCN_0')(x)
+    x = Dense(num_classes, name='FCN_1')(x)
     return Model(inputs=inputs, outputs=x, name="FC")
 
 def get_lstm_attention(units, num_classes, max_obs=200, inp_dim=108, dropout=0.5):

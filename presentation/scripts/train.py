@@ -63,9 +63,9 @@ def run(opt):
 
     if opt.mode == 2:
         model = get_fc_attention(num_classes=num_classes,
-                                   max_obs=opt.max_obs,
-                                   inp_dim=inp_dim,
-                                   dropout=opt.dropout)
+                                 max_obs=opt.max_obs,
+                                 inp_dim=inp_dim,
+                                 dropout=opt.dropout)
 
     # Tensorboard
     train_writter = tf.summary.create_file_writer(

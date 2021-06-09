@@ -73,7 +73,11 @@ def run(opt):
     true_labels = []
     for batch in tqdm(test_batches, desc='test'):
         acc, ce, y_pred, y_true = valid_step(model, batch, return_pred=True)
-        predictions.append(y_pred[:, -1, :])
+        if len(y_pred.shape)>2:
+            predictions.append(y_pred[:, -1, :])
+        else:
+            predictions.append(y_pred)
+
         true_labels.append(y_true)
 
     y_pred = tf.concat(predictions, 0)
