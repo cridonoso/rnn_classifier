@@ -74,22 +74,18 @@ def _decode(sample, max_obs=200):
 
         input_serie = tf.slice(input_serie, [pivot,0], [curr_max_obs, -1])
         input_dict['length'] = curr_max_obs
+
     input_dict['values'] = input_serie
 
     return input_dict
 
 def _parse(input_dict):
-    times = tf.slice(input_dict['values'], [0,0],[-1, 1])
-    dtimes = get_delta(times)
+    times  = tf.slice(input_dict['values'], [0,0],[-1, 1])
     values = tf.slice(input_dict['values'], [0,1],[-1, 1])
-    values = standardize(values)
 
     out = astromer_emb(values, times)
-
     out = standardize(out, axis=1)
     out = tf.reshape(out, [tf.shape(values)[0], tf.shape(out)[-1]])
-
-    # out = tf.concat([dtimes, out], 1)
 
     input_dict['values'] = out
     input_dict['times'] = times
@@ -114,11 +110,11 @@ def load_records(source, batch_size, max_obs=200, repeat=1, mode=0):
                     for folder in os.listdir(source) if not folder.endswith('.csv')\
                     for x in os.listdir(os.path.join(source, folder))]
         datasets = [dataset.map(lambda x: _decode(x, max_obs)) for dataset in datasets]
+        datasets = [dataset.repeat(repeat) for dataset in datasets]
         if mode == 0:
             datasets = [dataset.map(_parse) for dataset in datasets]
         if mode == 1:
             datasets = [dataset.map(_parse_2) for dataset in datasets]
-        datasets = [dataset.repeat(repeat) for dataset in datasets]
         datasets = [dataset.cache() for dataset in datasets]
         datasets = [dataset.shuffle(1000, reshuffle_each_iteration=True) for dataset in datasets]
         dataset = tf.data.experimental.sample_from_datasets(datasets)

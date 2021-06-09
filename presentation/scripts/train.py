@@ -138,7 +138,7 @@ if __name__ == '__main__':
     parser.add_argument('--p', default="./runs/debug", type=str,
                         help='Proyect path. Here will be stored weights and metrics')
 
-    parser.add_argument('--max-obs', default=200, type=int,
+    parser.add_argument('--max-obs', default=100, type=int,
                     help='Max number of observations')
     parser.add_argument('--dropout', default=0.5 , type=float,
                         help='dropout proba.')

@@ -39,7 +39,7 @@ def run(opt):
                                  os.path.join(opt.data, 'test'))])
     test_batches = load_records(os.path.join(opt.data, 'test'),
                                 batch_size=opt.batch_size,
-                                max_obs=200,
+                                max_obs=100,
                                 repeat=-1,# for testing
                                 mode=conf['mode'])
 
