@@ -14,7 +14,6 @@ for mode in [0, 1, 2]:
                                                      --mode {} \
                                                      --data ./astromer/data/records/ogle/ \
                                                      --p ./runs/ogle_{}'.format(mode, mode)
-    																																	unit_type,
     try:
         subprocess.call(command1, shell=True)
     except Exception as e:
