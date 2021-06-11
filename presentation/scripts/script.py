@@ -20,4 +20,4 @@ for mode in [0, 1, 2]:
 	except Exception as e:
 	    print(e)
 	end = time. time()
-	print('{} fold_{} takes {}'.format(unit_type, fold_n,(end - start)))
+	print('{} fold_{} takes {}'.format(mode, fold_n,(end - start)))
