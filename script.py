@@ -12,7 +12,7 @@ for mode in [0, 1, 2]:
                                                      --batch-size 256 \
                                                      --repeat 1 \
                                                      --mode {} \
-                                                     --data ./astromer/data/records/ogle/ \
+                                                     --data /tf/classifier/astromer/data/records/ogle/ \
                                                      --p ./runs/ogle_{}'.format(mode, mode)
     try:
         subprocess.call(command1, shell=True)
