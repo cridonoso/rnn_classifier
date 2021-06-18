@@ -59,8 +59,8 @@ def _decode(sample, max_obs=200):
 
     # Sampling "max_obs" observations
     serie_len = tf.shape(input_serie)[0]
-    input_dict['length'] = serie_len
     curr_max_obs = tf.minimum(max_obs, serie_len)
+
     if max_obs != -1:
         pivot = 0
         if tf.greater(serie_len, max_obs):
@@ -76,6 +76,7 @@ def _decode(sample, max_obs=200):
         input_dict['length'] = curr_max_obs
 
     input_dict['values'] = input_serie
+    input_dict['mask'] = tf.ones([curr_max_obs, 1])
 
     return input_dict
 

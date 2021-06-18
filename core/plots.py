@@ -26,10 +26,13 @@ def plot_cm(cm, ax, title='CM', fontsize=15, cbar=False, yticklabels=True, class
                      mask=mask,
                      yticklabels=yticklabels)
 
-    if yticklabels and class_names is not None:
-        ax.set_yticklabels(class_names, rotation=0, fontsize=fontsize+1)
-        ax.set_xticklabels(class_names, rotation=90, fontsize=fontsize+1)
-
+    try:
+        if yticklabels and class_names is not None:
+            print(class_names)
+            ax.set_yticklabels(class_names, rotation=0, fontsize=fontsize+1)
+            ax.set_xticklabels(class_names, rotation=90, fontsize=fontsize+1)
+    except:
+        pass
     ax.set_title(title, fontsize=fontsize+5)
 
     ax.axhline(y=0, color='k',linewidth=4)
