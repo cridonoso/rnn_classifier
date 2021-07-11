@@ -2,3 +2,6 @@
 runs/
 astromer/
 *ipynb_checkpoints
+data/raw_data
+data/records
+.Trash-0/

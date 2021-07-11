@@ -4,10 +4,10 @@ import argparse
 import os, sys
 import json
 
-from core.custom_metrics import custom_acc
-from core.custom_losses import custom_bce
 from core.tboard  import save_scalar, draw_graph
-from core.models import get_lstm_attention, get_lstm_no_attention, get_fc_attention
+from core.metrics import custom_acc
+from core.losses import custom_bce
+from core.models import get_lstm, get_phased
 from core.data import load_records
 from time import gmtime, strftime
 from tqdm import tqdm
@@ -34,7 +34,9 @@ def valid_step(model, batch, return_pred=False):
     return acc, ce
 
 def run(opt):
-    # Read Data
+    # ===============================
+    # ======== Load Records =========
+    # ===============================
     num_classes = tf.reduce_sum([1 for _ in os.listdir(
                                  os.path.join(opt.data, 'train'))])
     train_batches = load_records(os.path.join(opt.data, 'train'),
@@ -47,33 +49,34 @@ def run(opt):
                                  repeat=opt.repeat)
 
     inp_dim = [t['values'].shape[-1] for t in train_batches][0]
-    # Instance the model
+    # ===============================
+    # ======= Instance Model ========
+    # ===============================
     if opt.mode == 0:
-        model = get_lstm_attention(units=opt.units,
-                                   num_classes=num_classes,
-                                   max_obs=opt.max_obs,
-                                   inp_dim=inp_dim,
-                                   dropout=opt.dropout)
+        model = get_lstm(units=opt.units,
+                         num_classes=num_classes,
+                         max_obs=opt.max_obs,
+                         inp_dim=inp_dim,
+                         dropout=opt.dropout)
     if opt.mode == 1:
-        model = get_lstm_no_attention(units=opt.units,
-                                      num_classes=num_classes,
-                                      max_obs=opt.max_obs,
-                                      inp_dim=inp_dim,
-                                      dropout=opt.dropout)
+        model = get_phased(units=opt.units,
+                           num_classes=num_classes,
+                           max_obs=opt.max_obs,
+                           inp_dim=inp_dim,
+                           dropout=opt.dropout)
 
-    if opt.mode == 2:
-        model = get_fc_attention(num_classes=num_classes,
-                                 max_obs=opt.max_obs,
-                                 inp_dim=inp_dim,
-                                 dropout=opt.dropout)
-
-    # Tensorboard
+    # ===============================
+    # ========= Tensorboard =========
+    # ===============================
     train_writter = tf.summary.create_file_writer(
                                     os.path.join(opt.p, 'logs', 'train'))
     valid_writter = tf.summary.create_file_writer(
                                     os.path.join(opt.p, 'logs', 'valid'))
 
-    # Optimizer
+    # ===============================
+    # ========== Optimizer ==========
+    # === and Tensorboard Metrics ===
+    # ===============================
     optimizer = tf.keras.optimizers.Adam(opt.lr)
     # To save metrics
     train_bce  = tf.keras.metrics.Mean(name='train_bce')
@@ -81,7 +84,9 @@ def run(opt):
     train_acc  = tf.keras.metrics.Mean(name='train_acc')
     valid_acc  = tf.keras.metrics.Mean(name='valid_acc')
 
-    # Save Hyperparameters
+    # ===============================
+    # ===== Save Hyperparameters ====
+    # ===============================
     conf_file = os.path.join(opt.p, 'conf.json')
     varsdic = vars(opt)
     varsdic['num_classes'] = int(num_classes.numpy())
