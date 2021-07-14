@@ -167,7 +167,8 @@ def _decode(sample, max_obs=200):
         input_serie = tf.slice(input_serie, [0,0], [curr_max_obs, -1])
 
 
-    mask = get_padding_mask(max_obs, tf.expand_dims(input_dict['length'], 0))
+    time_steps = tf.shape(input_serie)[0]
+    mask = get_padding_mask(max_obs, tf.expand_dims(time_steps, 0))
 
     input_dict['values'] = standardize(input_serie)
     input_dict['mask'] = mask
