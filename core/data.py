@@ -90,13 +90,17 @@ def create_dataset(meta_df,
                    n_jobs=None,
                    subsets_frac=(0.5, 0.25),
                    max_lcs_per_record=100,
-                   band=1):
+                   band=1,
+                   debug=False):
     os.makedirs(target, exist_ok=True)
 
-    detections = pd.read_csv(source, chunksize=1000)
-    for det in detections:
-        detections = det
-        break
+    if debug:
+        detections = pd.read_csv(source, chunksize=1000)
+        for det in detections:
+            detections = det
+            break
+    else:
+        detections = pd.read_csv(source)
 
     dist_labels = meta_df['classALeRCE'].value_counts()
     unique = list(dist_labels.keys())
