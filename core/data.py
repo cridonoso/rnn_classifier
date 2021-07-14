@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import os
 
+from core.masking import get_padding_mask
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
@@ -166,8 +167,10 @@ def _decode(sample, max_obs=200):
         input_serie = tf.slice(input_serie, [0,0], [curr_max_obs, -1])
 
 
+    mask = get_padding_mask(max_obs, tf.expand_dims(input_dict['length'], 0))
+
     input_dict['values'] = standardize(input_serie)
-    input_dict['mask'] = tf.ones([curr_max_obs, 1])
+    input_dict['mask'] = mask
 
     return input_dict
 
