@@ -59,35 +59,33 @@ def get_example(lcid, label, lightcurve):
                                   feature_lists= element_lists)
     return ex
 
-def process_lc(row, source, unique_classes, band, writer):
-    lc_id = row['id']
-    path  = row['Path'].split('/')[-1]
-    label = list(unique_classes).index(row['Class'])
-    lc_path = os.path.join(source, path)
-    observations = pd.read_csv(lc_path)
+def process_lc(observations, oid, label, band, writer):
     observations = observations[observations['fid'] == band]
     observations = observations[['mjd', 'magpsf_corr', 'sigmapsf_corr_ext']]
     observations = observations.dropna()
     observations = observations.sort_values('mjd')
     observations = observations.drop_duplicates(keep='last')
-    numpy_lc = observations.values
-    ex = get_example(lc_id, label, numpy_lc)
-    writer.write(ex.SerializeToString())
+    if observations.shape[0] > 5:
+        numpy_lc = observations.values
+        ex = get_example(oid, label, numpy_lc)
+        writer.write(ex.SerializeToString())
 
-def write_records(frame, dest, max_lcs_per_record, source, unique, band=1, n_jobs=None):
+def write_records(frame, dest, max_lcs_per_record, detections, ylabel, band=1, n_jobs=None):
     n_jobs = mp.cpu_count() if n_jobs is not None else n_jobs
     # Get frames with fixed number of lightcurves
     collection = [frame.iloc[i:i+max_lcs_per_record] \
                   for i in range(0, frame.shape[0], max_lcs_per_record)]
     # Iterate over subset
     for counter, subframe in enumerate(collection):
+        partial_det = detections[detections['oid'].isin(subframe['oid'])]
+        lightcurves = partial_det.groupby('oid')
         with tf.io.TFRecordWriter(dest+'/chunk_{}.record'.format(counter)) as writer:
-            Parallel(n_jobs=n_jobs)(delayed(process_lc)(row, source, unique, band, writer) \
-                                    for k, row in subframe.iterrows())
+            Parallel(n_jobs=n_jobs)(delayed(process_lc)(obs, oid, ylabel, band, writer) \
+                                    for oid, obs in lightcurves)
 
 
 def create_dataset(meta_df,
-                   source='data/raw_data/macho/MACHO/LCs',
+                   source='data/raw_data/detections.csv',
                    target='data/records/macho/',
                    n_jobs=None,
                    subsets_frac=(0.5, 0.25),
@@ -95,22 +93,30 @@ def create_dataset(meta_df,
                    band=1):
     os.makedirs(target, exist_ok=True)
 
-    dist_labels = meta_df['Class'].value_counts()
+    detections = pd.read_csv(source, chunksize=1000)
+    for det in detections:
+        detections = det
+        break
+
+    dist_labels = meta_df['classALeRCE'].value_counts()
     unique = list(dist_labels.keys())
     dist_labels.to_csv(os.path.join(target, 'objects.csv'), index=False)
 
     # Separate by class
-    cls_groups = meta_df.groupby('Class')
+    cls_groups = meta_df.groupby('classALeRCE')
 
     for cls_name, cls_meta in tqdm(cls_groups, total=len(cls_groups)):
         subsets = divide_training_subset(cls_meta,
                                          train=subsets_frac[0],
                                          val=subsets_frac[0])
 
+        ylabel = unique.index(cls_name)
+
         for subset_name, frame in subsets:
             dest = os.path.join(target, subset_name, cls_name)
             os.makedirs(dest, exist_ok=True)
-            write_records(frame, dest, max_lcs_per_record, source, unique, band, n_jobs)
+            write_records(frame, dest, max_lcs_per_record, detections,
+                          ylabel, band, n_jobs)
 
 
 
