@@ -170,6 +170,10 @@ def _decode(sample, max_obs=200):
     time_steps = tf.shape(input_serie)[0]
     mask = get_padding_mask(max_obs, tf.expand_dims(time_steps, 0))
 
+    if curr_max_obs < max_obs:
+        filler    = tf.zeros([max_obs-time_steps, 3])
+        input_serie  = tf.concat([input_serie, filler], 0)
+
     input_dict['values'] = standardize(input_serie)
     input_dict['mask'] = tf.transpose(mask)
 
