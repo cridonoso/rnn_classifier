@@ -82,7 +82,7 @@ def write_records(frame, dest, max_lcs_per_record, detections, ylabel, band=1, n
         lightcurves = partial_det.groupby('oid')
         with tf.io.TFRecordWriter(dest+'/chunk_{}.record'.format(counter)) as writer:
             Parallel(n_jobs=n_jobs)(delayed(process_lc)(obs, oid, ylabel, band, writer) \
-                                    for oid, obs in lightcurves)
+                                    for oid, obs in lightcurves if obs.shape[0]>=5)
 
 
 def create_dataset(meta_df,
@@ -198,11 +198,9 @@ def load_records(source, batch_size, max_obs=200, repeat=1):
     datasets = [tf.data.TFRecordDataset(x) for x in records_files]
 
     datasets = [dataset.repeat(repeat) for dataset in datasets]
-
     datasets = [dataset.map(fn) for dataset in datasets]
-
     datasets = [dataset.cache() for dataset in datasets]
-    datasets = [dataset.shuffle(1000, reshuffle_each_iteration=True) for dataset in datasets]
+    datasets = [dataset.shuffle(batch_size, reshuffle_each_iteration=True) for dataset in datasets]
     dataset = tf.data.experimental.sample_from_datasets(datasets)
     dataset = dataset.padded_batch(batch_size)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
