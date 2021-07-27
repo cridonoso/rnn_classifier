@@ -191,6 +191,10 @@ def load_records(source, batch_size, max_obs=200, repeat=1):
 
     fn = adjust_fn(_decode, max_obs)
 
+    objdf = pd.read_csv('/'.join(source.split('/')[:-1])+'/objects.csv')
+    objdf['w']  = 1 - (objdf['classALeRCE'] - objdf['classALeRCE'].min())/(objdf['classALeRCE'].max()-objdf['classALeRCE'].min())
+    repeats = [int(x*repeat) if x != 0 else 1 for x in objdf['w']]
+    
     records_files = []
     for folder in os.listdir(source):
         for x in os.listdir(os.path.join(source, folder)):
@@ -199,7 +203,7 @@ def load_records(source, batch_size, max_obs=200, repeat=1):
 
     datasets = [tf.data.TFRecordDataset(x) for x in records_files]
 
-    datasets = [dataset.repeat(repeat) for dataset in datasets]
+    datasets = [dataset.repeat(r) for dataset, r in zip(datasets, repeats)]
     datasets = [dataset.map(fn) for dataset in datasets]
     datasets = [dataset.shuffle(batch_size, reshuffle_each_iteration=True) for dataset in datasets]
     dataset = tf.data.experimental.sample_from_datasets(datasets)
