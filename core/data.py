@@ -1,6 +1,12 @@
+import multiprocessing as mp
 import tensorflow as tf
+import pandas as pd
+import numpy as np
 import os
 
+from core.masking import get_padding_mask
+from joblib import Parallel, delayed
+from tqdm import tqdm
 
 def _bytes_feature(value):
     """Returns a bytes_list from a string / byte."""
@@ -16,19 +22,109 @@ def _int64_feature(value):
 
 def standardize(tensor, axis=0):
     mean_value = tf.reduce_mean(tensor, axis, name='mean_value')
-    std_value = tf.math.reduce_std(tensor, axis, name='std_value')
-
-    if tf.rank(tensor) != tf.rank(mean_value):
+    if axis == 1:
         mean_value = tf.expand_dims(mean_value, axis)
-        std_value = tf.expand_dims(std_value, axis)
-
-    normed = tf.math.divide_no_nan(tensor - mean_value, std_value)
+    normed = tensor - mean_value
     return normed
 
-def get_delta(tensor):
-    tensor = tensor[1:] - tensor[:-1]
-    tensor = tf.concat([tf.expand_dims([0.], 1), tensor], 0)
-    return tensor
+def divide_training_subset(frame, train, val):
+    frame = frame.sample(frac=1)
+    n_samples = frame.shape[0]
+    n_train = int(n_samples*train)
+    n_val = int(n_samples*val//2)
+
+    sub_train = frame.iloc[:n_train]
+    sub_val   = frame.iloc[n_train:n_train+n_val]
+    sub_test  = frame.iloc[n_train+n_val:]
+
+    return ('train', sub_train), ('val', sub_val), ('test', sub_test)
+
+def get_example(lcid, label, lightcurve):
+    f = dict()
+
+    dict_features={
+    'id': tf.train.Feature(bytes_list=tf.train.BytesList(value=[str(lcid).encode()])),
+    'label': tf.train.Feature(int64_list=tf.train.Int64List(value=[label])),
+    'length': tf.train.Feature(int64_list=tf.train.Int64List(value=[lightcurve.shape[0]])),
+    }
+    element_context = tf.train.Features(feature = dict_features)
+
+    dict_sequence = {}
+    for col in range(lightcurve.shape[1]):
+        seqfeat = _float_feature(lightcurve[:, col])
+        seqfeat = tf.train.FeatureList(feature = [seqfeat])
+        dict_sequence['dim_{}'.format(col)] = seqfeat
+
+    element_lists = tf.train.FeatureLists(feature_list=dict_sequence)
+    ex = tf.train.SequenceExample(context = element_context,
+                                  feature_lists= element_lists)
+    return ex
+
+def process_lc(observations, oid, label, band, writer):
+    observations = observations[observations['fid'] == band]
+    observations = observations[['mjd', 'magpsf_corr', 'sigmapsf_corr_ext']]
+    observations = observations.dropna()
+    observations = observations[observations['magpsf_corr']<25]
+    observations = observations.sort_values('mjd')
+    observations = observations.drop_duplicates(keep='last')
+    if observations.shape[0] > 5:
+        numpy_lc = observations.values
+        ex = get_example(oid, label, numpy_lc)
+        writer.write(ex.SerializeToString())
+
+def write_records(frame, dest, max_lcs_per_record, detections, ylabel, band=1, n_jobs=None):
+    n_jobs = mp.cpu_count() if n_jobs is not None else n_jobs
+    # Get frames with fixed number of lightcurves
+    collection = [frame.iloc[i:i+max_lcs_per_record] \
+                  for i in range(0, frame.shape[0], max_lcs_per_record)]
+    # Iterate over subset
+    for counter, subframe in enumerate(collection):
+        partial_det = detections[detections['oid'].isin(subframe['oid'])]
+        lightcurves = partial_det.groupby('oid')
+        with tf.io.TFRecordWriter(dest+'/chunk_{}.record'.format(counter)) as writer:
+            Parallel(n_jobs=n_jobs)(delayed(process_lc)(obs, oid, ylabel, band, writer) \
+                                    for oid, obs in lightcurves if obs.shape[0]>=5)
+
+
+def create_dataset(meta_df,
+                   source='data/raw_data/detections.csv',
+                   target='data/records/macho/',
+                   n_jobs=None,
+                   subsets_frac=(0.5, 0.25),
+                   max_lcs_per_record=100,
+                   band=1,
+                   debug=False):
+    os.makedirs(target, exist_ok=True)
+
+    if debug:
+        detections = pd.read_csv(source, chunksize=1000)
+        for det in detections:
+            detections = det
+            break
+    else:
+        detections = pd.read_csv(source)
+
+    dist_labels = meta_df['classALeRCE'].value_counts().reset_index()
+    unique = list(dist_labels['index'].unique())
+    dist_labels.to_csv(os.path.join(target, 'objects.csv'), index=False)
+
+    # Separate by class
+    cls_groups = meta_df.groupby('classALeRCE')
+
+    for cls_name, cls_meta in tqdm(cls_groups, total=len(cls_groups)):
+        subsets = divide_training_subset(cls_meta,
+                                         train=subsets_frac[0],
+                                         val=subsets_frac[0])
+
+        ylabel = unique.index(cls_name)
+
+        for subset_name, frame in subsets:
+            dest = os.path.join(target, subset_name, cls_name)
+            os.makedirs(dest, exist_ok=True)
+            write_records(frame, dest, max_lcs_per_record, detections,
+                          ylabel, band, n_jobs)
+
+
 
 def _decode(sample, max_obs=200):
     context_features = {'label': tf.io.FixedLenFeature([],dtype=tf.int64),
@@ -59,59 +155,59 @@ def _decode(sample, max_obs=200):
 
     # Sampling "max_obs" observations
     serie_len = tf.shape(input_serie)[0]
-    input_dict['length'] = serie_len
-    curr_max_obs = tf.minimum(max_obs, serie_len)
-    if max_obs != -1:
-        pivot = 0
-        if tf.greater(serie_len, max_obs):
-            pivot = tf.random.uniform([],
-                                      minval=0,
-                                      maxval=serie_len-curr_max_obs,
-                                      dtype=tf.int32)
+    curr_max_obs = tf.minimum(serie_len, max_obs)
+    pivot = 0
+    if tf.greater(serie_len, max_obs):
+        pivot = tf.random.uniform([],
+                                  minval=0,
+                                  maxval=serie_len-curr_max_obs,
+                                  dtype=tf.int32)
 
         input_serie = tf.slice(input_serie, [pivot,0], [curr_max_obs, -1])
-        input_dict['length'] = curr_max_obs
     else:
         input_serie = tf.slice(input_serie, [0,0], [curr_max_obs, -1])
-        input_dict['length'] = curr_max_obs
+
+
+    time_steps = tf.shape(input_serie)[0]
+    mask = get_padding_mask(max_obs, tf.expand_dims(time_steps-1, 0))
+
+    input_serie = standardize(input_serie, 0)
+    if curr_max_obs < max_obs:
+        filler    = tf.zeros([max_obs-time_steps, 3])
+        input_serie  = tf.concat([input_serie, filler], 0)
 
     input_dict['values'] = input_serie
+    input_dict['mask'] = 1. - tf.transpose(mask)
 
     return input_dict
 
-def _parse_2(input_dict):
-    times  = tf.slice(input_dict['values'], [0,0],[-1, 1])
-    dtimes = get_delta(times)
-    values = tf.slice(input_dict['values'], [0,1],[-1, 1])
-    values = standardize(values)
-    std = tf.slice(input_dict['values'], [0,2],[-1, 1])
-    std = standardize(std)
-    inputs = tf.concat([dtimes, values, std], 1)
-    input_dict['values'] = inputs
-    input_dict['times'] = times
-    return input_dict
+def adjust_fn(func, max_obs):
+    def wrap(*args, **kwargs):
+        result = func(*args, max_obs)
+        return result
+    return wrap
 
 def load_records(source, batch_size, max_obs=200, repeat=1):
 
-    if repeat != -1:
-        datasets = [tf.data.TFRecordDataset(os.path.join(source, folder, x)) \
-                    for folder in os.listdir(source) if not folder.endswith('.csv')\
-                    for x in os.listdir(os.path.join(source, folder))]
-        datasets = [dataset.map(lambda x: _decode(x, max_obs)) for dataset in datasets]
-        datasets = [dataset.repeat(repeat) for dataset in datasets]
-        datasets = [dataset.map(_parse_2) for dataset in datasets]
-        datasets = [dataset.cache() for dataset in datasets]
-        datasets = [dataset.shuffle(1000, reshuffle_each_iteration=True) for dataset in datasets]
-        dataset = tf.data.experimental.sample_from_datasets(datasets)
+    fn = adjust_fn(_decode, max_obs)
 
-    else: # TESTING LOADER
-        datasets = [os.path.join(source, folder, x) \
-                    for folder in os.listdir(source) if not folder.endswith('.csv')\
-                    for x in os.listdir(os.path.join(source, folder))]
-        dataset = tf.data.TFRecordDataset(datasets)
-        dataset = dataset.map(lambda x: _decode(x, max_obs))
-        dataset = dataset.map(_parse_2)
+    objdf = pd.read_csv('/'.join(source.split('/')[:-1])+'/objects.csv')
+    objdf['w']  = 1 - (objdf['classALeRCE'] - objdf['classALeRCE'].min())/(objdf['classALeRCE'].max()-objdf['classALeRCE'].min())
+    repeats = [int(x*repeat) if x != 0 else 1 for x in objdf['w']]
+    
+    records_files = []
+    for folder in os.listdir(source):
+        for x in os.listdir(os.path.join(source, folder)):
+            path = os.path.join(source, folder, x)
+            records_files.append(path)
 
+    datasets = [tf.data.TFRecordDataset(x) for x in records_files]
+
+    datasets = [dataset.repeat(r) for dataset, r in zip(datasets, repeats)]
+    datasets = [dataset.map(fn) for dataset in datasets]
+    datasets = [dataset.shuffle(batch_size, reshuffle_each_iteration=True) for dataset in datasets]
+    dataset = tf.data.experimental.sample_from_datasets(datasets)
     dataset = dataset.padded_batch(batch_size)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.cache()
     return dataset

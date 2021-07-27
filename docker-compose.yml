@@ -5,7 +5,6 @@ services:
         container_name: clf
         volumes:
             - ./:/tf/classifier/
-            - /home/cridonoso/Documents/astromer:/tf/classifier/astromer
         ports:
             - 6006:6006
             - 8888:8888
