@@ -105,7 +105,7 @@ def create_dataset(meta_df,
         detections = pd.read_csv(source)
 
     dist_labels = meta_df['classALeRCE'].value_counts().reset_index()
-    unique = list(dist_labels.keys())
+    unique = list(dist_labels['index'].unique())
     dist_labels.to_csv(os.path.join(target, 'objects.csv'), index=False)
 
     # Separate by class
