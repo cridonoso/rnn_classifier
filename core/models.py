@@ -5,7 +5,7 @@ from tensorflow.keras import Input, Model
 from tensorflow.keras.layers import LSTM, Dense, LayerNormalization, RNN
 from core.phased import PhasedLSTM
 
-def get_lstm(units, num_classes, max_obs=200, inp_dim=108, dropout=0.5):
+def get_lstm(units, num_classes, max_obs=200, dropout=0.5):
     values = Input(shape=(max_obs, 3), name='input')
     maskbol   = Input(shape=(max_obs), dtype=tf.float32, name='mask')
 
@@ -25,7 +25,7 @@ def get_lstm(units, num_classes, max_obs=200, inp_dim=108, dropout=0.5):
     return Model(inputs=inputs, outputs=x, name="LSTMCLF")
 
 
-def get_phased(units, num_classes, max_obs=200, inp_dim=108, dropout=0.5):
+def get_phased(units, num_classes, max_obs=200, dropout=0.5):
     values = Input(shape=(max_obs, 3), name='input')
     maskbol   = Input(shape=(max_obs), dtype=tf.float32, name='mask')
 

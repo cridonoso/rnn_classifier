@@ -64,6 +64,7 @@ def process_lc(observations, oid, label, band, writer):
     observations = observations[observations['fid'] == band]
     observations = observations[['mjd', 'magpsf_corr', 'sigmapsf_corr_ext']]
     observations = observations.dropna()
+    observations = observations[observations['magpsf_corr']<25]
     observations = observations.sort_values('mjd')
     observations = observations.drop_duplicates(keep='last')
     if observations.shape[0] > 5:
@@ -103,7 +104,7 @@ def create_dataset(meta_df,
     else:
         detections = pd.read_csv(source)
 
-    dist_labels = meta_df['classALeRCE'].value_counts()
+    dist_labels = meta_df['classALeRCE'].value_counts().reset_index()
     unique = list(dist_labels.keys())
     dist_labels.to_csv(os.path.join(target, 'objects.csv'), index=False)
 
@@ -170,11 +171,12 @@ def _decode(sample, max_obs=200):
     time_steps = tf.shape(input_serie)[0]
     mask = get_padding_mask(max_obs, tf.expand_dims(time_steps-1, 0))
 
+    input_serie = standardize(input_serie, 0)
     if curr_max_obs < max_obs:
         filler    = tf.zeros([max_obs-time_steps, 3])
         input_serie  = tf.concat([input_serie, filler], 0)
 
-    input_dict['values'] = standardize(input_serie)
+    input_dict['values'] = input_serie
     input_dict['mask'] = 1. - tf.transpose(mask)
 
     return input_dict
@@ -199,9 +201,9 @@ def load_records(source, batch_size, max_obs=200, repeat=1):
 
     datasets = [dataset.repeat(repeat) for dataset in datasets]
     datasets = [dataset.map(fn) for dataset in datasets]
-    datasets = [dataset.cache() for dataset in datasets]
     datasets = [dataset.shuffle(batch_size, reshuffle_each_iteration=True) for dataset in datasets]
     dataset = tf.data.experimental.sample_from_datasets(datasets)
     dataset = dataset.padded_batch(batch_size)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    dataset = dataset.cache()
     return dataset

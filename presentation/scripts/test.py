@@ -6,10 +6,10 @@ import os, sys
 import h5py
 import json
 
-from core.custom_metrics import custom_acc
-from core.custom_losses import custom_bce
+from core.metrics import custom_acc
+from core.losses import custom_bce
 from core.tboard  import save_scalar, draw_graph
-from core.models import get_lstm_attention, get_lstm_no_attention, get_fc_attention
+from core.models import get_lstm, get_phased
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 from core.data import load_records
 from time import gmtime, strftime
@@ -37,6 +37,7 @@ def run(opt):
     # Read Data
     num_classes = tf.reduce_sum([1 for _ in os.listdir(
                                  os.path.join(opt.data, 'test'))])
+
     test_batches = load_records(os.path.join(opt.data, 'test'),
                                 batch_size=opt.batch_size,
                                 max_obs=conf['max_obs'],
@@ -46,27 +47,21 @@ def run(opt):
     inp_dim = [t['values'].shape[-1] for t in test_batches][0]
     # Instance the model
     if conf['mode'] == 0:
-        model = get_lstm_attention(units=conf['units'],
-                                   num_classes=conf['num_classes'],
-                                   dropout=conf['dropout'],
-                                   max_obs=conf['max_obs'],
-                                   inp_dim=inp_dim)
+        model = get_lstm(units=conf['units'],
+                         num_classes=num_classes,
+                         max_obs=conf['max_obs'],
+                         inp_dim=inp_dim,
+                         dropout=conf['dropout'])
     if conf['mode'] == 1:
-        model = get_lstm_no_attention(units=conf['units'],
-                                      num_classes=conf['num_classes'],
-                                      max_obs=conf['max_obs'],
-                                      inp_dim=inp_dim,
-                                      dropout=conf['dropout'])
+        model = get_phased(units=conf['units'],
+                           num_classes=num_classes,
+                           max_obs=conf['max_obs'],
+                           inp_dim=inp_dim,
+                           dropout=conf['dropout'])
 
-    if conf['mode'] == 2:
-        model = get_fc_attention(num_classes=num_classes,
-                                   max_obs=conf['max_obs'],
-                                   inp_dim=inp_dim,
-                                   dropout=conf['dropout'])
 
     weights_path = '{}/weights'.format(opt.p)
     model.load_weights(weights_path).expect_partial()
-
 
 
     predictions = []
