@@ -60,7 +60,7 @@ def get_example(lcid, label, lightcurve):
                                   feature_lists= element_lists)
     return ex
 
-def alerce_filter(observations, name):
+def alerce_filter(observations):
     observations = observations[observations['rb'] > 0.55]
     observations = observations[observations['corrected']]
     observations = observations[['mjd', 'magpsf_corr', 'sigmapsf_corr_ext']]
@@ -75,7 +75,7 @@ def alerce_filter(observations, name):
 
 def process_lc(observations, oid, label, band, writer):
     observations = observations[observations['fid'] == band]
-    observations = alerce_filter(observations, name)
+    observations = alerce_filter(observations)
     if observations.shape[0] > 10:
         numpy_lc = observations.values
         ex = get_example(oid, label, numpy_lc)
