@@ -60,14 +60,23 @@ def get_example(lcid, label, lightcurve):
                                   feature_lists= element_lists)
     return ex
 
-def process_lc(observations, oid, label, band, writer):
-    observations = observations[observations['fid'] == band]
+def alerce_filter(observations, name):
+    observations = observations[observations['rb'] > 0.55]
+    observations = observations[observations['corrected']]
     observations = observations[['mjd', 'magpsf_corr', 'sigmapsf_corr_ext']]
+    observations.columns = ['mjd', 'mag', 'errmag']
     observations = observations.dropna()
-    observations = observations[observations['magpsf_corr']<25]
+    observations = observations[observations['mag']<23]
+    observations = observations[observations['errmag']<1]
     observations = observations.sort_values('mjd')
     observations = observations.drop_duplicates(keep='last')
-    if observations.shape[0] > 5:
+
+    return observations
+
+def process_lc(observations, oid, label, band, writer):
+    observations = observations[observations['fid'] == band]
+    observations = alerce_filter(observations, name
+    if observations.shape[0] > 10:
         numpy_lc = observations.values
         ex = get_example(oid, label, numpy_lc)
         writer.write(ex.SerializeToString())
@@ -194,7 +203,7 @@ def load_records(source, batch_size, max_obs=200, repeat=1):
     objdf = pd.read_csv('/'.join(source.split('/')[:-1])+'/objects.csv')
     objdf['w']  = 1 - (objdf['classALeRCE'] - objdf['classALeRCE'].min())/(objdf['classALeRCE'].max()-objdf['classALeRCE'].min())
     repeats = [int(x*repeat) if x != 0 else 1 for x in objdf['w']]
-    
+
     records_files = []
     for folder in os.listdir(source):
         for x in os.listdir(os.path.join(source, folder)):
