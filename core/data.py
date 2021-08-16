@@ -75,7 +75,7 @@ def alerce_filter(observations, name):
 
 def process_lc(observations, oid, label, band, writer):
     observations = observations[observations['fid'] == band]
-    observations = alerce_filter(observations, name
+    observations = alerce_filter(observations, name)
     if observations.shape[0] > 10:
         numpy_lc = observations.values
         ex = get_example(oid, label, numpy_lc)
