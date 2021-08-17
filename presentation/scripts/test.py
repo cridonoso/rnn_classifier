@@ -35,27 +35,21 @@ def run(opt):
         conf = json.load(handle)
 
     # Read Data
-    num_classes = tf.reduce_sum([1 for _ in os.listdir(
-                                 os.path.join(opt.data, 'test'))])
-
     test_batches = load_records(os.path.join(opt.data, 'test'),
                                 batch_size=opt.batch_size,
                                 max_obs=conf['max_obs'])
 
-    max_obs = [t['values'].shape[1] for t in test_batches][0]
-    inp_dim = [t['values'].shape[-1] for t in test_batches][0]
+
     # Instance the model
     if conf['mode'] == 0:
         model = get_lstm(units=conf['units'],
-                         num_classes=num_classes,
+                         num_classes=conf['num_classes'],
                          max_obs=conf['max_obs'],
-                         inp_dim=inp_dim,
                          dropout=conf['dropout'])
     if conf['mode'] == 1:
         model = get_phased(units=conf['units'],
-                           num_classes=num_classes,
+                           num_classes=conf['num_classes'],
                            max_obs=conf['max_obs'],
-                           inp_dim=inp_dim,
                            dropout=conf['dropout'])
 
 
