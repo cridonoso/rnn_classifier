@@ -37,7 +37,8 @@ def run(opt):
     # Read Data
     test_batches = load_records(os.path.join(opt.data, 'test'),
                                 batch_size=opt.batch_size,
-                                max_obs=conf['max_obs'])
+                                max_obs=conf['max_obs'],
+                                take=opt.take)
 
 
     # Instance the model
@@ -104,6 +105,7 @@ if __name__ == '__main__':
                         help='Proyect path. Here will be stored weights and metrics')
     parser.add_argument('--batch-size', default=256, type=int,
                         help='batch size')
-
+    parser.add_argument('--take', default=1, type=int,
+                        help='number of batches to take')
     opt = parser.parse_args()
     run(opt)
