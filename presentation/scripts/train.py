@@ -42,11 +42,11 @@ def run(opt):
     train_batches = load_records(os.path.join(opt.data, 'train'),
                                  batch_size=opt.batch_size,
                                  max_obs=opt.max_obs,
-                                 repeat=opt.repeat)
+                                 take=opt.take)
     valid_batches = load_records(os.path.join(opt.data, 'val'),
                                  batch_size=opt.batch_size,
                                  max_obs=opt.max_obs,
-                                 repeat=opt.repeat)
+                                 take=opt.take)
 
     inp_dim = [t['values'].shape[-1] for t in train_batches][0]
     # ===============================
@@ -159,7 +159,7 @@ if __name__ == '__main__':
                         help='Number of epochs')
     parser.add_argument('--batch-size', default=256, type=int,
                         help='batch size')
-    parser.add_argument('--repeat', default=1, type=int,
+    parser.add_argument('--take', default=1, type=int,
                         help='number of times to repeat the training and validation dataset')
     parser.add_argument('--lr', default=1e-3, type=float,
                         help='optimizer initial learning rate')

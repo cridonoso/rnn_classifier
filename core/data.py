@@ -218,4 +218,4 @@ def load_records(source, batch_size, max_obs=200, take=10):
     dataset = dataset.padded_batch(batch_size)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
     dataset = dataset.cache()
-    return dataset
+    return dataset.take(take)
