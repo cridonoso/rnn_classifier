@@ -40,8 +40,7 @@ def run(opt):
 
     test_batches = load_records(os.path.join(opt.data, 'test'),
                                 batch_size=opt.batch_size,
-                                max_obs=conf['max_obs'],
-                                repeat=1)
+                                max_obs=conf['max_obs'])
 
     max_obs = [t['values'].shape[1] for t in test_batches][0]
     inp_dim = [t['values'].shape[-1] for t in test_batches][0]
