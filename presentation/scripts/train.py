@@ -56,13 +56,11 @@ def run(opt):
         model = get_lstm(units=opt.units,
                          num_classes=num_classes,
                          max_obs=opt.max_obs,
-                         inp_dim=inp_dim,
                          dropout=opt.dropout)
     if opt.mode == 1:
         model = get_phased(units=opt.units,
                            num_classes=num_classes,
                            max_obs=opt.max_obs,
-                           inp_dim=inp_dim,
                            dropout=opt.dropout)
 
     # ===============================
