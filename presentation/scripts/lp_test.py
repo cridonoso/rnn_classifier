@@ -43,7 +43,7 @@ def run(opt):
     # Read Data
     test_batches = load_records(os.path.join(opt.data, 'test'),
                                 batch_size=opt.batch_size,
-                                take=2,
+                                take=opt.take,
                                 max_obs=conf_lstm['max_obs'])
 
 
@@ -114,6 +114,8 @@ if __name__ == '__main__':
                         help='Proyect path for PLSTM.')
     parser.add_argument('--batch-size', default=256, type=int,
                         help='batch size')
+    parser.add_argument('--take', default=1, type=int,
+                        help='batches for testing')
 
     opt = parser.parse_args()
     run(opt)
