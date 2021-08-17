@@ -85,7 +85,7 @@ def run(opt):
     # ===============================
     conf_file = os.path.join(opt.p, 'conf.json')
     varsdic = vars(opt)
-    varsdic['num_classes'] = int(num_classes.numpy())
+    varsdic['num_classes'] = num_classes
     varsdic['exp_date'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
     with open(conf_file, 'w') as json_file:
         json.dump(varsdic, json_file, indent=4)
