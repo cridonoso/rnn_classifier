@@ -135,7 +135,7 @@ def create_dataset(meta_df,
 
 
 
-def _decode(sample, max_obs=200):
+def _decode(sample, max_obs=200, num_classes=2):
     context_features = {'label': tf.io.FixedLenFeature([],dtype=tf.int64),
                         'length': tf.io.FixedLenFeature([],dtype=tf.int64),
                         'id': tf.io.FixedLenFeature([], dtype=tf.string)}
@@ -151,7 +151,8 @@ def _decode(sample, max_obs=200):
 
     input_dict = dict()
     input_dict['lcid']   = tf.cast(context['id'], tf.string)
-    input_dict['label']  = tf.cast(context['label'], tf.int32)
+    labels = tf.cast(context['label'], tf.int32)
+    input_dict['label']  = tf.one_hot(labels, num_classes)
 
     casted_inp_parameters = []
     for i in range(3):
@@ -190,18 +191,18 @@ def _decode(sample, max_obs=200):
 
     return input_dict
 
-def adjust_fn(func, max_obs):
+def adjust_fn(func, max_obs, num_classes):
     def wrap(*args, **kwargs):
-        result = func(*args, max_obs)
+        result = func(*args, max_obs, num_classes)
         return result
     return wrap
 
-def load_records(source, batch_size, max_obs=200, take=10):
-
-    fn = adjust_fn(_decode, max_obs)
-
+def load_records(source, batch_size, max_obs=200, take=10, return_num_classes=False):
     objdf = pd.read_csv('/'.join(source.split('/')[:-1])+'/objects.csv')
-    objdf['w']  = 1 - (objdf['classALeRCE'] - objdf['classALeRCE'].min())/(objdf['classALeRCE'].max()-objdf['classALeRCE'].min())
+    num_classes = objdf['classALeRCE'].shape[0]
+    print('[INFO] Number of Classes: {}'.format(num_classes))
+
+    fn = adjust_fn(_decode, max_obs, num_classes)
 
     records_files = []
     for folder in os.listdir(source):
@@ -218,4 +219,8 @@ def load_records(source, batch_size, max_obs=200, take=10):
     dataset = dataset.padded_batch(batch_size)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
     dataset = dataset.cache()
-    return dataset.take(take)
+
+    if return_num_classes:
+        return dataset.take(take), num_classes
+    else:
+        return dataset.take(take)

@@ -37,18 +37,16 @@ def run(opt):
     # ===============================
     # ======== Load Records =========
     # ===============================
-    num_classes = tf.reduce_sum([1 for _ in os.listdir(
-                                 os.path.join(opt.data, 'train'))])
-    train_batches = load_records(os.path.join(opt.data, 'train'),
+    train_batches, num_classes = load_records(os.path.join(opt.data, 'train'),
                                  batch_size=opt.batch_size,
                                  max_obs=opt.max_obs,
-                                 take=opt.take)
+                                 take=opt.take,
+                                 return_num_classes=True)
     valid_batches = load_records(os.path.join(opt.data, 'val'),
                                  batch_size=opt.batch_size,
                                  max_obs=opt.max_obs,
                                  take=opt.take)
 
-    inp_dim = [t['values'].shape[-1] for t in train_batches][0]
     # ===============================
     # ======= Instance Model ========
     # ===============================
