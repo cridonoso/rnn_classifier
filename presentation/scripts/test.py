@@ -70,7 +70,9 @@ def run(opt):
 
     y_pred = tf.concat(predictions, 0)
     y_true = tf.concat(true_labels, 0)
+
     pred_labels = tf.argmax(y_pred, 1)
+    y_true = tf.argmax(y_true, 1)
 
     precision, \
     recall, \
