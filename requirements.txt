@@ -2,4 +2,6 @@ pandas
 joblib
 scikit-learn
 matplotlib
+notebook
+latex
 tqdm

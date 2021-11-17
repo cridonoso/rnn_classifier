@@ -6,18 +6,18 @@ from tensorflow.keras.layers import LSTM, Dense, LayerNormalization, RNN
 from core.phased import PhasedLSTM
 
 def get_lstm(units, num_classes, max_obs=200, dropout=0.5):
-    values = Input(shape=(max_obs, 3), name='input')
-    maskbol   = Input(shape=(max_obs), dtype=tf.float32, name='mask')
+    values  = Input(shape=(max_obs, 4), name='input')
+    mask  = Input(shape=(max_obs, ), name='mask')
 
-    inputs = {'values': values, 'mask': maskbol}
+    inputs = {'input': values, 'mask': mask}
 
     x = LSTM(units,
              return_sequences=True,
              dropout=dropout,
-             name='RNN_0')(inputs['values'], mask=tf.cast(inputs['mask'], dtype=tf.bool))
+             name='RNN_0')(inputs['input'], mask=tf.cast(inputs['mask'], dtype=tf.bool))
     x = LayerNormalization(axis=1)(x)
     x = LSTM(units,
-             return_sequences=True,
+             return_sequences=False,
              dropout=dropout,
              name='RNN_1')(x, mask=tf.cast(inputs['mask'], dtype=tf.bool))
     x = LayerNormalization(axis=1)(x)
@@ -26,10 +26,9 @@ def get_lstm(units, num_classes, max_obs=200, dropout=0.5):
 
 
 def get_phased(units, num_classes, max_obs=200, dropout=0.5):
-    values = Input(shape=(max_obs, 3), name='input')
-    maskbol   = Input(shape=(max_obs), dtype=tf.float32, name='mask')
-
-    inputs = {'values': values, 'mask': maskbol}
+    values  = Input(shape=(max_obs, 4), name='input')
+    mask  = Input(shape=(max_obs, 1), name='mask')
+    inputs = {'input': values, 'mask': mask}
 
     x = RNN(PhasedLSTM(units, dropout=dropout),
              name='RNN_0',
@@ -37,7 +36,7 @@ def get_phased(units, num_classes, max_obs=200, dropout=0.5):
     x = LayerNormalization(axis=1)(x)
     x = RNN(PhasedLSTM(units, dropout=dropout),
              name='RNN_1',
-             return_sequences=True)(x, mask=inputs['mask'])
+             return_sequences=False)(x, mask=inputs['mask'])
     x = LayerNormalization(axis=1)(x)
     x = Dense(num_classes, name='FCN')(x)
     return Model(inputs=inputs, outputs=x, name="PhasedCLF")

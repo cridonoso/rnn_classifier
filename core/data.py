@@ -2,11 +2,14 @@ import multiprocessing as mp
 import tensorflow as tf
 import pandas as pd
 import numpy as np
+import logging
 import os
 
-from core.masking import get_padding_mask
 from joblib import Parallel, delayed
 from tqdm import tqdm
+from time import time
+
+from joblib import wrap_non_picklable_objects
 
 def _bytes_feature(value):
     """Returns a bytes_list from a string / byte."""
@@ -20,26 +23,26 @@ def _float_feature(list_of_floats):  # float32
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
-def standardize(tensor, axis=0):
-    mean_value = tf.reduce_mean(tensor, axis, name='mean_value')
+def normalice(tensor, axis=0):
+    min_value = tf.reduce_min(tensor, axis, name='min_value')
+    max_value = tf.reduce_max(tensor, axis, name='max_value')
     if axis == 1:
-        mean_value = tf.expand_dims(mean_value, axis)
-    normed = tensor - mean_value
+        min_value = tf.expand_dims(min_value, axis)
+        max_value = tf.expand_dims(max_value, axis)
+    normed = (tensor - min_value)/(max_value-min_value)
     return normed
 
-def divide_training_subset(frame, train, val):
-    frame = frame.sample(frac=1)
-    n_samples = frame.shape[0]
-    n_train = int(n_samples*train)
-    n_val = int(n_samples*val//2)
-
-    sub_train = frame.iloc[:n_train]
-    sub_val   = frame.iloc[n_train:n_train+n_val]
-    sub_test  = frame.iloc[n_train+n_val:]
-
-    return ('train', sub_train), ('val', sub_val), ('test', sub_test)
-
 def get_example(lcid, label, lightcurve):
+    """
+    Create a record example from numpy values.
+    Args:
+        lcid (string): object id
+        label (int): class code
+        lightcurve (numpy array): time, magnitudes and observational error
+    Returns:
+        tensorflow record
+    """
+
     f = dict()
 
     dict_features={
@@ -60,87 +63,71 @@ def get_example(lcid, label, lightcurve):
                                   feature_lists= element_lists)
     return ex
 
-def alerce_filter(observations):
-    observations = observations[observations['rb'] > 0.55]
-    observations = observations[observations['corrected']]
-    observations = observations[['mjd', 'magpsf_corr', 'sigmapsf_corr_ext']]
-    observations.columns = ['mjd', 'mag', 'errmag']
-    observations = observations.dropna()
-    observations = observations[observations['mag']<23]
-    observations = observations[observations['errmag']<1]
-    observations = observations.sort_values('mjd')
-    observations = observations.drop_duplicates(keep='last')
+@wrap_non_picklable_objects
+def process_lc2(lc_obs, oid, unique_labels):
+    label = unique_labels.index(lc_obs['alerceclass'].iloc[0])
+    lc_obs = lc_obs[['mjd', 'forcediffimflux', 'forcediffimfluxunc', 'forcediffimsnr']]
+    lc_obs.columns = ['mjd', 'mag', 'errmag', 'snr']
+    lc_obs = lc_obs.dropna()
+    lc_obs = lc_obs.sort_values('mjd')
+    lc_obs = lc_obs.drop_duplicates(keep='last')
 
-    return observations
+    numpy_lc = lc_obs.values
 
-def process_lc(observations, oid, label, band, writer):
-    observations = observations[observations['fid'] == band]
-    observations = alerce_filter(observations)
-    if observations.shape[0] > 10:
-        numpy_lc = observations.values
-        ex = get_example(oid, label, numpy_lc)
+    return oid, label, numpy_lc
+
+def process_lc3(lc_index, label, numpy_lc, writer):
+    try:
+        ex = get_example(lc_index, label, numpy_lc)
         writer.write(ex.SerializeToString())
-
-def write_records(frame, dest, max_lcs_per_record, detections, ylabel, band=1, n_jobs=None):
-    n_jobs = mp.cpu_count() if n_jobs is not None else n_jobs
-    # Get frames with fixed number of lightcurves
-    collection = [frame.iloc[i:i+max_lcs_per_record] \
-                  for i in range(0, frame.shape[0], max_lcs_per_record)]
-    # Iterate over subset
-    for counter, subframe in enumerate(collection):
-        partial_det = detections[detections['oid'].isin(subframe['oid'])]
-        lightcurves = partial_det.groupby('oid')
-        with tf.io.TFRecordWriter(dest+'/chunk_{}.record'.format(counter)) as writer:
-            Parallel(n_jobs=n_jobs)(delayed(process_lc)(obs, oid, ylabel, band, writer) \
-                                    for oid, obs in lightcurves if obs.shape[0]>=5)
-
+    except:
+        print('[INFO] {} could not be processed'.format(lc_index))
 
 def create_dataset(meta_df,
-                   source='data/raw_data/detections.csv',
-                   target='data/records/macho/',
+                   observations,
+                   target='data/records/ztf/',
+                   record_name='chunk',
                    n_jobs=None,
-                   subsets_frac=(0.5, 0.25),
-                   max_lcs_per_record=100,
-                   band=1,
-                   debug=False):
+                   unique_labels = [],
+                   band=1):
     os.makedirs(target, exist_ok=True)
 
-    if debug:
-        detections = pd.read_csv(source, chunksize=1000)
-        for det in detections:
-            detections = det
-            break
-    else:
-        detections = pd.read_csv(source)
-
-    dist_labels = meta_df['classALeRCE'].value_counts().reset_index()
-    unique = list(dist_labels['index'].unique())
-    dist_labels.to_csv(os.path.join(target, 'objects.csv'), index=False)
-
     # Separate by class
-    cls_groups = meta_df.groupby('classALeRCE')
+    observations = observations[observations['oid'].isin(meta_df['oid'])]
+    observations = pd.merge(observations, meta_df[['oid', 'alerceclass']], on='oid')
+    lightcurves  = observations.groupby('oid')
 
-    for cls_name, cls_meta in tqdm(cls_groups, total=len(cls_groups)):
-        subsets = divide_training_subset(cls_meta,
-                                         train=subsets_frac[0],
-                                         val=subsets_frac[0])
+    print('[INFO] Preprocessing lighcurves...')
+    var = Parallel(n_jobs=n_jobs)(delayed(process_lc2)(lc, oid, unique_labels) \
+                                for oid, lc in lightcurves)
 
-        ylabel = unique.index(cls_name)
+    with tf.io.TFRecordWriter('{}/{}.record'.format(target, record_name)) as writer:
+        for data_lc in tqdm(var):
+            process_lc3(*data_lc, writer)
 
-        for subset_name, frame in subsets:
-            dest = os.path.join(target, subset_name, cls_name)
-            os.makedirs(dest, exist_ok=True)
-            write_records(frame, dest, max_lcs_per_record, detections,
-                          ylabel, band, n_jobs)
+# ==============================
+# ====== LOADING FUNCTIONS =====
+# ==============================
+def adjust_fn(func, *arguments):
+    def wrap(*args, **kwargs):
+        result = func(*args, *arguments)
+        return result
+    return wrap
 
-
-
-def _decode(sample, max_obs=200, num_classes=2):
+def deserialize(sample):
+    """
+    Read a serialized sample and convert it to tensor
+    Context and sequence features should match with the name used when writing.
+    Args:
+        sample (binary): serialized sample
+    Returns:
+        type: decoded sample
+    """
     context_features = {'label': tf.io.FixedLenFeature([],dtype=tf.int64),
                         'length': tf.io.FixedLenFeature([],dtype=tf.int64),
                         'id': tf.io.FixedLenFeature([], dtype=tf.string)}
     sequence_features = dict()
-    for i in range(3):
+    for i in range(4):
         sequence_features['dim_{}'.format(i)] = tf.io.VarLenFeature(dtype=tf.float32)
 
     context, sequence = tf.io.parse_single_sequence_example(
@@ -151,76 +138,104 @@ def _decode(sample, max_obs=200, num_classes=2):
 
     input_dict = dict()
     input_dict['lcid']   = tf.cast(context['id'], tf.string)
-    labels = tf.cast(context['label'], tf.int32)
-    input_dict['label']  = tf.one_hot(labels, num_classes)
+    input_dict['length'] = tf.cast(context['length'], tf.int32)
+    input_dict['label']  = tf.cast(context['label'], tf.int32)
 
     casted_inp_parameters = []
-    for i in range(3):
+    for i in range(4):
         seq_dim = sequence['dim_{}'.format(i)]
         seq_dim = tf.sparse.to_dense(seq_dim)
         seq_dim = tf.cast(seq_dim, tf.float32)
         casted_inp_parameters.append(seq_dim)
 
-    input_serie = tf.stack(casted_inp_parameters, axis=2)[0]
-
-    # Sampling "max_obs" observations
-    serie_len = tf.shape(input_serie)[0]
-    curr_max_obs = tf.minimum(serie_len, max_obs)
-    pivot = 0
-    if tf.greater(serie_len, max_obs):
-        pivot = tf.random.uniform([],
-                                  minval=0,
-                                  maxval=serie_len-curr_max_obs,
-                                  dtype=tf.int32)
-
-        input_serie = tf.slice(input_serie, [pivot,0], [curr_max_obs, -1])
-    else:
-        input_serie = tf.slice(input_serie, [0,0], [curr_max_obs, -1])
-
-
-    time_steps = tf.shape(input_serie)[0]
-    mask = get_padding_mask(max_obs, tf.expand_dims(time_steps-1, 0))
-
-    input_serie = standardize(input_serie, 0)
-    if curr_max_obs < max_obs:
-        filler    = tf.zeros([max_obs-time_steps, 3])
-        input_serie  = tf.concat([input_serie, filler], 0)
-
-    input_dict['values'] = input_serie
-    input_dict['mask'] = 1. - tf.transpose(mask)
-
+    sequence = tf.stack(casted_inp_parameters, axis=2)[0]
+    input_dict['input'] = sequence
     return input_dict
 
-def adjust_fn(func, max_obs, num_classes):
-    def wrap(*args, **kwargs):
-        result = func(*args, max_obs, num_classes)
-        return result
-    return wrap
+def get_window(sequence, length, pivot, max_obs):
+    pivot = tf.minimum(length-max_obs, pivot)
+    pivot = tf.maximum(0, pivot)
+    end = tf.minimum(length, max_obs)
 
-def load_records(source, batch_size, max_obs=200, take=10, return_num_classes=False):
-    objdf = pd.read_csv('/'.join(source.split('/')[:-1])+'/objects.csv')
-    num_classes = objdf['classALeRCE'].shape[0]
-    print('[INFO] Number of Classes: {}'.format(num_classes))
+    sliced = tf.slice(sequence, [pivot, 0], [end, -1])
+    return sliced
 
-    fn = adjust_fn(_decode, max_obs, num_classes)
+def get_windows(sample, max_obs):
+    input_dict = deserialize(sample)
 
-    records_files = []
-    for folder in os.listdir(source):
-        for x in os.listdir(os.path.join(source, folder)):
-            path = os.path.join(source, folder, x)
-            records_files.append(path)
+    sequence = input_dict['input']
+    rest = input_dict['length']%max_obs
 
-    datasets = [tf.data.TFRecordDataset(x) for x in records_files]
+    pivots = tf.tile([max_obs], [tf.cast(input_dict['length']/max_obs, tf.int32)])
+    pivots = tf.concat([[0], pivots], 0)
+    pivots = tf.math.cumsum(pivots)
 
-    datasets = [dataset.repeat() for dataset in datasets]
-    datasets = [dataset.map(fn) for dataset in datasets]
-    datasets = [dataset.shuffle(batch_size, reshuffle_each_iteration=True) for dataset in datasets]
-    dataset = tf.data.experimental.sample_from_datasets(datasets)
-    dataset = dataset.padded_batch(batch_size)
-    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.cache()
+    splits = tf.map_fn(lambda x: get_window(sequence,
+                                            input_dict['length'],
+                                            x,
+                                            max_obs),  pivots,
+                       infer_shape=False,
+                       fn_output_signature=(tf.float32))
 
-    if return_num_classes:
-        return dataset.take(take), num_classes
+    # aqui falta retornar labels y oids
+    y = tf.tile([input_dict['label']], [len(splits)])
+    ids = tf.tile([input_dict['lcid']], [len(splits)])
+
+    return splits, y, ids
+
+def format_lc(x, y, i, num_classes, max_obs):
+    x = normalice(x)
+    time_steps = tf.shape(x)[0]
+
+    mask = tf.ones([time_steps])
+    if time_steps < max_obs:
+        mask_fill = tf.zeros([max_obs - time_steps], dtype=tf.float32)
+        mask  = tf.concat([mask, mask_fill], 0)
+
+    input_dict = dict()
+    input_dict['input'] = x
+    input_dict['mask']  = mask
+    input_dict['id']    = i
+
+    return input_dict, tf.one_hot(y, num_classes)
+
+
+def load_records(source, batch_size, max_obs=100, num_classes=2, sampling=False, shuffle=False):
+    """
+    Pretraining data loader.
+    This method build the ASTROMER input format.
+    ASTROMER format is based on the BERT masking strategy.
+    Args:
+        source (string): Record folder
+        batch_size (int): Batch size
+        no_shuffle (bool): Do not shuffle training and validation dataset
+        max_obs (int): Max. number of observation per serie
+        msk_frac (float): fraction of values to be predicted ([MASK])
+        rnd_frac (float): fraction of [MASKED] values to replace with random values
+        same_frac (float): fraction of [MASKED] values to replace with true values
+    Returns:
+        Tensorflow Dataset: Iterator withg preprocessed batches
+    """
+    rec_paths = [os.path.join(source, x) for x in os.listdir(source)]
+
+    if sampling:
+        fn_0 = adjust_fn(sample_lc, max_obs)
     else:
-        return dataset.take(take)
+        fn_0 = adjust_fn(get_windows, max_obs)
+
+    fn_1 = adjust_fn(format_lc, num_classes, max_obs)
+
+    dataset = tf.data.TFRecordDataset(rec_paths)
+    if shuffle:
+        dataset = dataset.shuffle(10000)
+
+    dataset = dataset.map(fn_0)
+    if not sampling:
+        dataset = dataset.flat_map(lambda x,y,i: tf.data.Dataset.from_tensor_slices((x,y,i)))
+
+    dataset = dataset.map(fn_1)
+    padded_shapes = ({'input': (None, 4), 'mask': (None, ), 'id': ()},(num_classes))
+    dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes).cache()
+    dataset = dataset.prefetch(buffer_size=tf.data.AUTOTUNE)
+
+    return dataset
