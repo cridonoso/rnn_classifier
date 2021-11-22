@@ -71,11 +71,11 @@ def run(opt):
                      embeddings_freq=0,
                      embeddings_metadata=None)
 
-    hist = model.fit(train_batches.take(2),
-                     epochs=1,
+    hist = model.fit(train_batches,
+                     epochs=self.epochs,
                      batch_size=opt.batch_size,
                      callbacks=[estop, tb],
-                     validation_data=val_batches.take(2))
+                     validation_data=val_batches)
 
     model.save(os.path.join(opt.p, 'model.h5'))
 
