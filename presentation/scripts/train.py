@@ -35,15 +35,24 @@ def run(opt):
                                  sampling=False,
                                  shuffle=True)
 
-    model = get_lstm(opt.units,
-                     num_classes,
-                     max_obs=opt.max_obs,
-                     dropout=opt.dropout)
+    if opt.rnn_type == 'lstm':
+        print('[INFO] Using LSTM unit')
+        model = get_lstm(opt.units,
+                         num_classes,
+                         max_obs=opt.max_obs,
+                         dropout=opt.dropout)
+    if opt.rnn_type == 'phased':
+        print('[INFO] Using PHASED LSTM unit')
+        model = get_phased(opt.units,
+                         num_classes,
+                         max_obs=opt.max_obs,
+                         dropout=opt.dropout)
+
 
     # Compile
     model.compile(optimizer=Adam(opt.lr),
-                  loss=CategoricalCrossentropy(from_logits=True),
-                  metrics='accuracy')
+                  loss=custom_bce,
+                  metrics=custom_acc)
 
     estop = EarlyStopping(monitor='val_loss',
                           min_delta=0,
@@ -52,6 +61,7 @@ def run(opt):
                           mode='auto',
                           baseline=None,
                           restore_best_weights=True)
+
     tb = TensorBoard(log_dir=os.path.join(opt.p, 'logs'),
                      write_graph=False,
                      write_images=False,
@@ -61,13 +71,13 @@ def run(opt):
                      embeddings_freq=0,
                      embeddings_metadata=None)
 
-    hist = model.fit(train_batches,
-                     epochs=opt.epochs,
+    hist = model.fit(train_batches.take(2),
+                     epochs=1,
                      batch_size=opt.batch_size,
                      callbacks=[estop, tb],
-                     validation_data=val_batches)
+                     validation_data=val_batches.take(2))
 
-
+    model.save(os.path.join(opt.p, 'model.h5'))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -76,6 +86,8 @@ if __name__ == '__main__':
                         help='Dataset folder containing the records files')
     parser.add_argument('--p', default="./runs/debug", type=str,
                         help='Proyect path. Here will be stored weights and metrics')
+    parser.add_argument('--rnn-type', default="lstm", type=str,
+                        help='lstm or phased')
 
     parser.add_argument('--max-obs', default=200, type=int,
                     help='Max number of observations')
