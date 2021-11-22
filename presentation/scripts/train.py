@@ -72,7 +72,7 @@ def run(opt):
                      embeddings_metadata=None)
 
     hist = model.fit(train_batches,
-                     epochs=self.epochs,
+                     epochs=opt.epochs,
                      batch_size=opt.batch_size,
                      callbacks=[estop, tb],
                      validation_data=val_batches)
