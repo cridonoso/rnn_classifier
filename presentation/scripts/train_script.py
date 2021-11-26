@@ -6,15 +6,19 @@ import json
 import os, sys
 
 ds_name = sys.argv[1]
+gpu = sys.argv[2]
+
 for rnn_type in ['phased', 'lstm']:
     for fold_n in range(3):
         start = time.time()
         command1 = 'python -m presentation.scripts.train \
                     --data ./data/records/{}/fold_{} \
                     --rnn-type {} \
+                    --gpu {} \
                     --p ./runs/{}/fold_{}/{} ' \
                     .format(ds_name, fold_n,
                             rnn_type,
+                            gpu,
                             ds_name, fold_n, rnn_type
                             )
         try:

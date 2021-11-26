@@ -114,7 +114,7 @@ def adjust_fn(func, *arguments):
         return result
     return wrap
 
-def deserialize(sample):
+def deserialize(sample, inp_dim=4):
     """
     Read a serialized sample and convert it to tensor
     Context and sequence features should match with the name used when writing.
@@ -127,7 +127,7 @@ def deserialize(sample):
                         'length': tf.io.FixedLenFeature([],dtype=tf.int64),
                         'id': tf.io.FixedLenFeature([], dtype=tf.string)}
     sequence_features = dict()
-    for i in range(4):
+    for i in range(inp_dim):
         sequence_features['dim_{}'.format(i)] = tf.io.VarLenFeature(dtype=tf.float32)
 
     context, sequence = tf.io.parse_single_sequence_example(
@@ -142,7 +142,7 @@ def deserialize(sample):
     input_dict['label']  = tf.cast(context['label'], tf.int32)
 
     casted_inp_parameters = []
-    for i in range(4):
+    for i in range(inp_dim):
         seq_dim = sequence['dim_{}'.format(i)]
         seq_dim = tf.sparse.to_dense(seq_dim)
         seq_dim = tf.cast(seq_dim, tf.float32)
