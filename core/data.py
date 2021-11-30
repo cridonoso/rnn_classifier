@@ -183,8 +183,14 @@ def get_windows(sample, max_obs):
 
     return splits, y, ids
 
-def format_lc(x, y, i, num_classes, max_obs):
-    x = normalice(x)
+def get_entire_lc(sample):
+    input_dict = deserialize(sample)
+    return input_dict['input'], input_dict['label'], input_dict['lcid']
+
+def format_lc(x, y, i, num_classes, max_obs, normed=True):
+    if normed:
+        x = normalice(x)
+        
     time_steps = tf.shape(x)[0]
 
     mask = tf.ones([time_steps])
@@ -200,7 +206,7 @@ def format_lc(x, y, i, num_classes, max_obs):
     return input_dict, tf.one_hot(y, num_classes)
 
 
-def load_records(source, batch_size, max_obs=100, num_classes=2, sampling=False, shuffle=False):
+def load_records(source, batch_size, max_obs=100, num_classes=2, mode=0, shuffle=False, normed=True):
     """
     Pretraining data loader.
     This method build the ASTROMER input format.
@@ -208,29 +214,31 @@ def load_records(source, batch_size, max_obs=100, num_classes=2, sampling=False,
     Args:
         source (string): Record folder
         batch_size (int): Batch size
-        no_shuffle (bool): Do not shuffle training and validation dataset
+        shuffle (bool): Shuffle dataset
         max_obs (int): Max. number of observation per serie
-        msk_frac (float): fraction of values to be predicted ([MASK])
-        rnd_frac (float): fraction of [MASKED] values to replace with random values
-        same_frac (float): fraction of [MASKED] values to replace with true values
+        mode (int): preprocessing mode
     Returns:
         Tensorflow Dataset: Iterator withg preprocessed batches
     """
     rec_paths = [os.path.join(source, x) for x in os.listdir(source)]
 
-    if sampling:
-        fn_0 = adjust_fn(sample_lc, max_obs)
-    else:
+    if mode == 0:
+        fn_0 = get_entire_lc
+        max_obs = 0
+    if mode == 1:
         fn_0 = adjust_fn(get_windows, max_obs)
-
-    fn_1 = adjust_fn(format_lc, num_classes, max_obs)
+    if mode == 2:
+        fn_0 = adjust_fn(sample_lc, max_obs)
+        
+        
+    fn_1 = adjust_fn(format_lc, num_classes, max_obs, normed)
 
     dataset = tf.data.TFRecordDataset(rec_paths)
     if shuffle:
         dataset = dataset.shuffle(10000)
 
     dataset = dataset.map(fn_0)
-    if not sampling:
+    if mode == 1:
         dataset = dataset.flat_map(lambda x,y,i: tf.data.Dataset.from_tensor_slices((x,y,i)))
 
     dataset = dataset.map(fn_1)
